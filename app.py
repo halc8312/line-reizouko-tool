@@ -1,4 +1,5 @@
 import os
+import unicodedata  # ユニコードの正規化を行うモジュールをインポート
 from flask import Flask, request, jsonify
 from models.database import init_db, add_item, get_items
 from routes.users import users_bp
@@ -10,14 +11,14 @@ import re  # 正規表現を使って賞味期限のフォーマットをチェ�
 
 app = Flask(__name__)
 
-# Register blueprints
+# Blueprintを登録
 app.register_blueprint(users_bp, url_prefix='/users')
 app.register_blueprint(fridge_bp, url_prefix='/fridge')
 
-# Initialize the database
+# データベースを初期化
 init_db()
 
-# Start the scheduler only if it's not already running
+# スケジューラが既に動作していない場合にのみ開始
 if not scheduler.running:
     scheduler.start()
 
@@ -28,7 +29,7 @@ user_states = {}
 def hello():
     return "Hello, LINE Refrigerator Management Tool!"
 
-# Webhook endpoint for LINE
+# LINEのWebhookエンドポイント
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
@@ -37,7 +38,8 @@ def webhook():
         # LINEプラットフォームからのイベントを処理
         for event in body['events']:
             if event['type'] == 'message' and event['message']['type'] == 'text':
-                user_message = event['message']['text']
+                # ユーザーメッセージを正規化して前後の空白を削除
+                user_message = unicodedata.normalize('NFKC', event['message']['text']).strip()
                 user_id = event['source']['userId']
                 reply_token = event['replyToken']
 
