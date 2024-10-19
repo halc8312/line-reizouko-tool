@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, request, jsonify
 from models.database import init_db
 from routes.users import users_bp
 from routes.fridge import fridge_bp
@@ -22,6 +22,21 @@ if not scheduler.running:
 @app.route('/')
 def hello():
     return "Hello, LINE Refrigerator Management Tool!"
+
+# Webhook endpoint for LINE
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    # LINEからのリクエストを受け取るエンドポイント
+    try:
+        body = request.get_json()
+        # リクエストの内容をログに出力（デバッグ用）
+        print(f"Received request: {body}")
+
+        # 必ず200 OKを返す
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"status": "error"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
