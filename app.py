@@ -15,8 +15,9 @@ app.register_blueprint(fridge_bp, url_prefix='/fridge')
 # Initialize the database
 init_db()
 
-# Start the scheduler
-scheduler.start()
+# Start the scheduler only if it's not already running
+if not scheduler.running:
+    scheduler.start()
 
 @app.route('/')
 def hello():
