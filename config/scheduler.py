@@ -15,7 +15,9 @@ def notify_users():
             items = get_items(user['user_id'])
             for item in items:
                 expiration_date = item[1]
-                if expiration_date - datetime.now().date() <= timedelta(days=3):
+                # datetime.strptimeを使用して適切に日付を比較
+                expiration_date_obj = datetime.strptime(expiration_date, '%Y-%m-%d')
+                if (expiration_date_obj - datetime.now()).days <= 3:
                     send_notification(user['user_id'], f"{item[0]}の賞味期限が近づいています（{expiration_date}まで）")
 
     except Exception as e:

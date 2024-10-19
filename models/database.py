@@ -51,15 +51,13 @@ def get_db_connection():
 
 def add_item(user_id, name, expiration_date, quantity):
     try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute('''
-            INSERT INTO items (name, expiration_date, quantity, user_id)
-            VALUES (%s, %s, %s, %s)
-        ''', (name, expiration_date, quantity, user_id))
-        connection.commit()
-        cursor.close()
-        connection.close()
+        with get_db_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO items (name, expiration_date, quantity, user_id)
+                    VALUES (%s, %s, %s, %s)
+                ''', (name, expiration_date, quantity, user_id))
+                connection.commit()
         return True
     except Exception as e:
         print(f"Error adding item: {e}")
@@ -67,14 +65,12 @@ def add_item(user_id, name, expiration_date, quantity):
 
 def get_items(user_id):
     try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute('''
-            SELECT name, expiration_date, quantity FROM items WHERE user_id = %s
-        ''', (user_id,))
-        items = cursor.fetchall()
-        cursor.close()
-        connection.close()
+        with get_db_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    SELECT name, expiration_date, quantity FROM items WHERE user_id = %s
+                ''', (user_id,))
+                items = cursor.fetchall()
         return items
     except Exception as e:
         print(f"Error fetching items: {e}")
@@ -82,14 +78,12 @@ def get_items(user_id):
 
 def delete_item(user_id, name):
     try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute('''
-            DELETE FROM items WHERE user_id = %s AND name = %s
-        ''', (user_id, name))
-        connection.commit()
-        cursor.close()
-        connection.close()
+        with get_db_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    DELETE FROM items WHERE user_id = %s AND name = %s
+                ''', (user_id, name))
+                connection.commit()
         return True
     except Exception as e:
         print(f"Error deleting item: {e}")
