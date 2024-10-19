@@ -1,60 +1,49 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from models.database import get_db_connection
-import datetime
+from models.database import get_items
+from flask import request
 import requests
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from datetime import datetime, timedelta
 
 scheduler = BackgroundScheduler()
 
-# Function to check items and send notifications
-def check_expiration_dates():
+def notify_users():
+    # ここでデータベースからユーザー情報を取得し、賞味期限が近いアイテムを通知します
     try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        today = datetime.date.today()
-        cursor.execute('''
-            SELECT name, expiration_date, user_id FROM items
-            WHERE expiration_date = %s
-        ''', (today + datetime.timedelta(days=3),))
-        items = cursor.fetchall()
+        users = []  # ユーザーリストをここに取得する処理が必要
+        for user in users:
+            items = get_items(user['user_id'])
+            for item in items:
+                expiration_date = item[1]
+                if expiration_date - datetime.now().date() <= timedelta(days=3):
+                    send_notification(user['user_id'], f"{item[0]}の賞味期限が近づいています（{expiration_date}まで）")
 
-        for item in items:
-            name, expiration_date, user_id = item
-            send_line_notification(user_id, name, expiration_date)
-
-        cursor.close()
-        connection.close()
     except Exception as e:
-        print(f"Error checking expiration dates: {e}")
+        print(f"Error notifying users: {e}")
 
-# Function to send notification to LINE
-def send_line_notification(user_id, item_name, expiration_date):
-    try:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.getenv('LINE_ACCESS_TOKEN')}"
-        }
-        message = f"Reminder: The item '{item_name}' will expire on {expiration_date}."
-        data = {
-            "to": user_id,
-            "messages": [
-                {
-                    "type": "text",
-                    "text": message
-                }
-            ]
-        }
-        response = requests.post("https://api.line.me/v2/bot/message/push", json=data, headers=headers)
-        if response.status_code != 200:
-            print(f"Failed to send notification: {response.text}")
-    except Exception as e:
-        print(f"Error sending LINE notification: {e}")
+def send_notification(user_id, message):
+    LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+    }
+    data = {
+        "to": user_id,
+        "messages": [
+            {
+                "type": "text",
+                "text": message
+            }
+        ]
+    }
 
-# Add job to scheduler
-scheduler.add_job(check_expiration_dates, 'interval', days=1)
+    response = requests.post(
+        "https://api.line.me/v2/bot/message/push",
+        headers=headers,
+        json=data
+    )
+    if response.status_code != 200:
+        print(f"Failed to send notification: {response.status_code}, {response.text}")
 
-# Start the scheduler
-scheduler.start()
+# スケジュールにジョブを追加
+scheduler.add_job(notify_users, 'interval', days=1)

@@ -32,16 +32,6 @@ def init_db():
                 username VARCHAR(100) NOT NULL
             )
         ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS notifications (
-                id SERIAL PRIMARY KEY,
-                user_id VARCHAR(100) NOT NULL,
-                item_name VARCHAR(100) NOT NULL,
-                expiration_date DATE NOT NULL,
-                notified BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        ''')
         connection.commit()
         cursor.close()
         connection.close()
@@ -58,3 +48,49 @@ def get_db_connection():
         host=result.hostname,
         port=result.port
     )
+
+def add_item(user_id, name, expiration_date, quantity):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute('''
+            INSERT INTO items (name, expiration_date, quantity, user_id)
+            VALUES (%s, %s, %s, %s)
+        ''', (name, expiration_date, quantity, user_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        return True
+    except Exception as e:
+        print(f"Error adding item: {e}")
+        return False
+
+def get_items(user_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute('''
+            SELECT name, expiration_date, quantity FROM items WHERE user_id = %s
+        ''', (user_id,))
+        items = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        return items
+    except Exception as e:
+        print(f"Error fetching items: {e}")
+        return []
+
+def delete_item(user_id, name):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute('''
+            DELETE FROM items WHERE user_id = %s AND name = %s
+        ''', (user_id, name))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        return True
+    except Exception as e:
+        print(f"Error deleting item: {e}")
+        return False
