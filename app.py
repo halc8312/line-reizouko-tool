@@ -4,6 +4,7 @@ from models.database import init_db
 from routes.users import users_bp
 from routes.fridge import fridge_bp
 from config.scheduler import scheduler
+from urllib.parse import quote as url_quote  # 修正
 
 app = Flask(__name__)
 
