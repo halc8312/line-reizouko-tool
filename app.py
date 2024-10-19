@@ -6,6 +6,7 @@ from routes.fridge import fridge_bp
 from config.scheduler import scheduler
 from urllib.parse import quote as url_quote
 import requests
+import re  # 正規表現を使って賞味期限のフォーマットをチェック
 
 app = Flask(__name__)
 
@@ -43,30 +44,43 @@ def webhook():
                 # ユーザーの状態に基づいて応答を生成
                 if user_id in user_states:
                     state = user_states[user_id]
-                    
+
                     if state['action'] == 'adding_item':
                         # ユーザーがアイテムの名前を送った段階
                         user_states[user_id]['item_name'] = user_message
                         reply_message = "賞味期限を教えてください（例: 2024-12-31）"
                         user_states[user_id]['next_step'] = 'expiration_date'
+
                     elif state.get('next_step') == 'expiration_date':
                         # ユーザーが賞味期限を送った段階
-                        user_states[user_id]['expiration_date'] = user_message
-                        reply_message = "数量を教えてください（例: 2）"
-                        user_states[user_id]['next_step'] = 'quantity'
+                        expiration_date = user_message
+                        # 正しいフォーマットかをチェック
+                        if re.match(r'^\d{4}-\d{2}-\d{2}$', expiration_date):
+                            user_states[user_id]['expiration_date'] = expiration_date
+                            reply_message = "数量を教えてください（例: 2）"
+                            user_states[user_id]['next_step'] = 'quantity'
+                        else:
+                            # フォーマットが間違っている場合、再度入力を促す
+                            reply_message = "賞味期限の形式が正しくありません。例: 2024-12-31 のように入力してください。"
+
                     elif state.get('next_step') == 'quantity':
                         # ユーザーが数量を送った段階でアイテムを追加
-                        item_name = state['item_name']
-                        expiration_date = state['expiration_date']
-                        quantity = user_message
+                        try:
+                            quantity = int(user_message)  # 数量を整数として取得
+                            item_name = state['item_name']
+                            expiration_date = state['expiration_date']
 
-                        if add_item(user_id, item_name, expiration_date, quantity):
-                            reply_message = f"{item_name}を追加しました。"
-                        else:
-                            reply_message = "アイテムの追加に失敗しました。"
-                        
-                        # 状態をクリア
-                        del user_states[user_id]
+                            if add_item(user_id, item_name, expiration_date, quantity):
+                                reply_message = f"{item_name}を追加しました。"
+                            else:
+                                reply_message = "アイテムの追加に失敗しました。"
+
+                            # 状態をクリア
+                            del user_states[user_id]
+                        except ValueError:
+                            # 数量が整数でない場合、再度入力を促す
+                            reply_message = "数量は数字で入力してください。例: 2"
+
                     else:
                         reply_message = "すみません、その操作はわかりません。"
                 else:
