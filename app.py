@@ -1,10 +1,11 @@
 import os
 from flask import Flask, request, jsonify
-from models.database import init_db
+from models.database import init_db, add_item, get_items
 from routes.users import users_bp
 from routes.fridge import fridge_bp
 from config.scheduler import scheduler
-from urllib.parse import quote as url_quote  # 修正
+from urllib.parse import quote as url_quote
+import requests
 
 app = Flask(__name__)
 
@@ -19,6 +20,9 @@ init_db()
 if not scheduler.running:
     scheduler.start()
 
+# ユーザーごとの状態を追跡するための辞書
+user_states = {}
+
 @app.route('/')
 def hello():
     return "Hello, LINE Refrigerator Management Tool!"
@@ -26,7 +30,6 @@ def hello():
 # Webhook endpoint for LINE
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # LINEからのリクエストを受け取るエンドポイント
     try:
         body = request.get_json()
 
@@ -34,17 +37,52 @@ def webhook():
         for event in body['events']:
             if event['type'] == 'message' and event['message']['type'] == 'text':
                 user_message = event['message']['text']
+                user_id = event['source']['userId']
                 reply_token = event['replyToken']
 
-                # ユーザーのメッセージに応じて応答を生成
-                if "食品を追加" in user_message:
-                    reply_message = "追加したい食品の名前を教えてください。"
-                elif "冷蔵庫の中身" in user_message:
-                    reply_message = "現在の冷蔵庫の中身は以下の通りです。"  # ここでデータベースからアイテムを取得して応答する
-                elif "食品を削除" in user_message:
-                    reply_message = "削除したい食品の名前を教えてください。"
+                # ユーザーの状態に基づいて応答を生成
+                if user_id in user_states:
+                    state = user_states[user_id]
+                    
+                    if state['action'] == 'adding_item':
+                        # ユーザーがアイテムの名前を送った段階
+                        user_states[user_id]['item_name'] = user_message
+                        reply_message = "賞味期限を教えてください（例: 2024-12-31）"
+                        user_states[user_id]['next_step'] = 'expiration_date'
+                    elif state.get('next_step') == 'expiration_date':
+                        # ユーザーが賞味期限を送った段階
+                        user_states[user_id]['expiration_date'] = user_message
+                        reply_message = "数量を教えてください（例: 2）"
+                        user_states[user_id]['next_step'] = 'quantity'
+                    elif state.get('next_step') == 'quantity':
+                        # ユーザーが数量を送った段階でアイテムを追加
+                        item_name = state['item_name']
+                        expiration_date = state['expiration_date']
+                        quantity = user_message
+
+                        if add_item(user_id, item_name, expiration_date, quantity):
+                            reply_message = f"{item_name}を追加しました。"
+                        else:
+                            reply_message = "アイテムの追加に失敗しました。"
+                        
+                        # 状態をクリア
+                        del user_states[user_id]
+                    else:
+                        reply_message = "すみません、その操作はわかりません。"
                 else:
-                    reply_message = "すみません、その操作はわかりません。「食品を追加」や「冷蔵庫の中身」などを教えてください。"
+                    # 新しい操作の開始
+                    if "食品を追加" in user_message:
+                        reply_message = "追加したい食品の名前を教えてください。"
+                        user_states[user_id] = {'action': 'adding_item'}
+                    elif "冷蔵庫の中身" in user_message:
+                        items = get_items(user_id)
+                        if items:
+                            items_list = "\n".join([f"{item[0]} - {item[1]} - {item[2]}個" for item in items])
+                            reply_message = f"現在の冷蔵庫の中身は以下の通りです:\n{items_list}"
+                        else:
+                            reply_message = "冷蔵庫には何も入っていません。"
+                    else:
+                        reply_message = "すみません、その操作はわかりません。「食品を追加」や「冷蔵庫の中身」などを教えてください。"
 
                 # LINEに応答を送信
                 reply_to_user(reply_token, reply_message)
@@ -55,9 +93,6 @@ def webhook():
         return jsonify({"status": "error"}), 500
 
 def reply_to_user(reply_token, message):
-    # LINEの返信APIを使用してユーザーにメッセージを返す
-    import requests
-
     LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
     headers = {
         "Content-Type": "application/json",
